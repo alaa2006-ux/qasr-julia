@@ -1,184 +1,171 @@
 'use client'
 
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { motion } from 'framer-motion'
+import { supabase } from '@/lib/supabaseClient'
+import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Textarea from '@/components/ui/Textarea'
-import Button from '@/components/ui/Button'
-
-const reservationSchema = z.object({
-  fullName: z.string().min(2, 'الاسم مطلوب'),
-  phone: z.string().min(10, 'رقم هاتف صحيح مطلوب'),
-  guests: z.number().min(1, 'عدد الأشخاص مطلوب').max(20, 'الحد الأقصى 20 شخص'),
-  date: z.string().min(1, 'تاريخ الحجز مطلوب'),
-  time: z.string().min(1, 'وقت الحجز مطلوب'),
-  notes: z.string().optional(),
-})
-
-type ReservationForm = z.infer<typeof reservationSchema>
 
 export default function ReservationPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [formData, setFormData] = useState<ReservationForm | null>(null)
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<ReservationForm>({
-    resolver: zodResolver(reservationSchema),
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    date: '',
+    time: '',
+    guests: '2',
+    notes: '',
   })
 
-  const onSubmit = async (data: ReservationForm) => {
-    setIsSubmitting(true)
-    setFormData(data)
+  const [isLoading, setIsLoading] = useState(false)
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-    // Simulate processing
-    await new Promise(resolve => setTimeout(resolve, 800))
-
-    setShowSuccess(true)
-    setIsSubmitting(false)
-
-    // Open WhatsApp after brief delay
-    setTimeout(() => {
-      const message = `مرحبًا قصر جوليا 👋
-
-أرغب في حجز طاولة، وهذه تفاصيل الحجز:
-
-الاسم: ${data.fullName}
-رقم الهاتف: ${data.phone}
-عدد الأشخاص: ${data.guests}
-التاريخ: ${data.date}
-الوقت: ${data.time}
-${data.notes ? `ملاحظات:\n${data.notes}` : ''}
-
-بانتظار تأكيد الحجز، شكرًا لكم.`
-
-      const encoded = encodeURIComponent(message)
-      window.open(`https://wa.me/963969387354?text=${encoded}`, '_blank')
-    }, 1500)
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  if (showSuccess) {
-    return (
-      <div className="min-h-[70vh] flex items-center justify-center px-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full bg-white rounded-2xl shadow-premium p-8 text-center"
-        >
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-brand-primary mb-2">
-            تم تجهيز تفاصيل حجزك ✓
-          </h2>
-          <p className="text-gray-600 mb-6">
-            سيتم الآن فتح واتساب لإرسال طلب الحجز إلى فريق قصر جوليا.
-          </p>
-          <Button onClick={() => window.location.href = '/'} variant="primary">
-            العودة للرئيسية
-          </Button>
-        </motion.div>
-      </div>
-    )
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setStatus(null)
+
+    try {
+      const { error } = await supabase.from('reservations').insert([
+        {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          date: formData.date,
+          time: formData.time,
+          guests: parseInt(formData.guests),
+          notes: formData.notes,
+        },
+      ])
+
+      if (error) throw error
+
+      setStatus({
+        type: 'success',
+        message: 'تم تأكيد طلب الحجز بنجاح! سنقوم بالتواصل معك لتأكيد التفاصيل.',
+      })
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        date: '',
+        time: '',
+        guests: '2',
+        notes: '',
+      })
+    } catch (err: any) {
+      setStatus({
+        type: 'error',
+        message: err.message || 'حدث خطأ أثناء حفظ الحجز، يرجى المحاولة لاحقاً.',
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-primary mb-3">
-            احجز طاولتك
-          </h1>
-          <div className="w-20 h-1 bg-brand-gold mx-auto" />
-          <p className="text-gray-600 mt-4">
-            املأ النموذج وسيتم توجيهك إلى واتساب لتأكيد الحجز
-          </p>
-        </div>
+    <main className="py-12 px-4 max-w-3xl mx-auto">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">حجز طاولة</h1>
+        <p className="text-center text-gray-500 mb-8">يسعدنا استضافتكم في مطعم قصر جوليا</p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-premium p-6 md:p-8"
-        >
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Input
-                label="الاسم الكامل"
-                placeholder="أدخل اسمك الكامل"
-                {...register('fullName')}
-                error={errors.fullName?.message}
-                required
-              />
-              <Input
-                label="رقم الهاتف"
-                placeholder="09XX XXX XXX"
-                type="tel"
-                {...register('phone')}
-                error={errors.phone?.message}
-                required
-              />
-            </div>
+        {status && (
+          <div
+            className={`p-4 rounded-lg mb-6 text-sm font-medium ${
+              status.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {status.message}
+          </div>
+        )}
 
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="عدد الأشخاص"
-              type="number"
-              min="1"
-              max="20"
-              {...register('guests', { valueAsNumber: true })}
-              error={errors.guests?.message}
+              label="الاسم الكامل"
+              name="name"
               required
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="أدخل اسمك الكريم"
             />
+            <Input
+              label="رقم الهاتف"
+              name="phone"
+              type="tel"
+              required
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="05xxxxxxxx"
+            />
+          </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-              <Input
-                label="تاريخ الحجز"
-                type="date"
-                {...register('date')}
-                error={errors.date?.message}
-                required
-              />
-              <Input
-                label="وقت الحجز"
-                type="time"
-                {...register('time')}
-                error={errors.time?.message}
-                required
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="البريد الإلكتروني"
+              name="email"
+              type="email"
+              required
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="example@gmail.com"
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">عدد الأشخاص</label>
+              <select
+                name="guests"
+                value={formData.guests}
+                onChange={handleChange}
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-gold focus:border-transparent outline-none transition text-gray-800"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                  <option key={num} value={num}>
+                    {num} {num === 1 ? 'شخص' : 'أشخاص'}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
 
-            <Textarea
-              label="ملاحظات إضافية"
-              placeholder="أي متطلبات خاصة أو مناسبات..."
-              rows={4}
-              {...register('notes')}
-              error={errors.notes?.message}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="تاريخ الحجز"
+              name="date"
+              type="date"
+              required
+              value={formData.date}
+              onChange={handleChange}
             />
+            <Input
+              label="وقت الحجز"
+              name="time"
+              type="time"
+              required
+              value={formData.time}
+              onChange={handleChange}
+            />
+          </div>
 
-            <Button
-              type="submit"
-              variant="gold"
-              size="lg"
-              isLoading={isSubmitting}
-              className="w-full"
-            >
-              تأكيد الحجز
-            </Button>
+          <Textarea
+            label="ملاحظات أو طلبات خاصة (اختياري)"
+            name="notes"
+            rows={3}
+            value={formData.notes}
+            onChange={handleChange}
+            placeholder="مثال: طاولة بجوار النافذة، احتفال بمناسبة خاصة..."
+          />
 
-            <p className="text-sm text-gray-500 text-center mt-4">
-              بالضغط على تأكيد الحجز، سيتم فتح واتساب لإرسال طلب الحجز
-            </p>
-          </form>
-        </motion.div>
+          <Button type="submit" variant="gold" className="w-full text-lg py-3" isLoading={isLoading}>
+            تأكيد الحجز
+          </Button>
+        </form>
       </div>
-    </div>
+    </main>
   )
 }
