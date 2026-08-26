@@ -1,151 +1,140 @@
 'use client'
 
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { motion } from 'framer-motion'
+import { supabase } from '@/lib/supabaseClient'
+import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Textarea from '@/components/ui/Textarea'
-import Button from '@/components/ui/Button'
-
-const complaintSchema = z.object({
-  category: z.string().min(1, 'يرجى اختيار نوع الشكوى أو الاقتراح'),
-  details: z.string().min(10, 'يرجى تفصيل الشكوى (10 أرقام/حروف على الأقل)'),
-  phone: z.string().optional(),
-})
-
-type ComplaintForm = z.infer<typeof complaintSchema>
 
 export default function ComplaintsPage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [ticketCode, setTicketCode] = useState<string | null>(null)
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<ComplaintForm>({
-    resolver: zodResolver(complaintSchema),
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    subject: '',
+    message: '',
   })
 
-  const onSubmit = async (data: ComplaintForm) => {
-    setIsSubmitting(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
-    // توليد رمز المراجعة السري الخاص بالشكوى
-    const randomNum = Math.floor(1000 + Math.random() * 9000)
-    const generatedCode = `CJ-2026-${randomNum}`
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
 
-    // محاكاة إرسال البيانات
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setStatus(null)
 
-    setTicketCode(generatedCode)
-    setIsSubmitting(false)
-    reset()
+    try {
+      const { error } = await supabase.from('complaints').insert([
+        {
+          name: formData.name || 'مجهول',
+          email: formData.email,
+          phone: formData.phone,
+          subject: formData.subject,
+          message: formData.message,
+        },
+      ])
+
+      if (error) throw error
+
+      setStatus({
+        type: 'success',
+        message: 'تم إرسال ملاحظتك بنجاح وبسرية تامة. شكراً لمساعدتنا في تحسين خدماتنا!',
+      })
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        subject: '',
+        message: '',
+      })
+    } catch (err: any) {
+      setStatus({
+        type: 'error',
+        message: err.message || 'حدث خطأ أثناء الإرسال، يرجى المحاولة لاحقاً.',
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-brand-cream py-12 px-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-bold text-brand-primary mb-3">
-            صندوق الشكاوى والاقتراحات
-          </h1>
-          <div className="w-20 h-1 bg-brand-gold mx-auto" />
-          <p className="text-gray-600 mt-4">
-            رسالتك تصل مباشرة إلى الإدارة العليا بقصر جوليا وبسرية تامة
-          </p>
-        </div>
+    <main className="py-12 px-4 max-w-3xl mx-auto">
+      <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">
+          صندوق الشكاوى والاقتراحات
+        </h1>
+        <p className="text-center text-gray-500 mb-8">
+          صوتك يهمنا لتطوير خدماتنا، جميع الملاحظات تُعامل بسرية تامة
+        </p>
 
-        {ticketCode ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-2xl shadow-premium p-8 text-center"
+        {status && (
+          <div
+            className={`p-4 rounded-lg mb-6 text-sm font-medium ${
+              status.type === 'success'
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
           >
-            <div className="w-16 h-16 bg-gold-100 rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-gold">
-              <span className="text-2xl">🔒</span>
-            </div>
-            <h2 className="text-2xl font-bold text-brand-primary mb-2">
-              تم تسجيل ملاحظتك بنجاح وبسرية
-            </h2>
-            <p className="text-gray-600 mb-4">
-              احتفظ برمز المراجعة الخاص بك لمتابعة الشكوى:
-            </p>
-            <div className="bg-brand-cream py-3 px-6 rounded-lg font-mono text-2xl font-bold text-brand-gold tracking-widest inline-block mb-6 border border-brand-gold/30">
-              {ticketCode}
-            </div>
-            <div>
-              <Button
-                onClick={() => setTicketCode(null)}
-                variant="primary"
-              >
-                تقديم ملاحظة أخرى
-              </Button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-premium p-6 md:p-8"
-          >
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  تصنيف الملاحظة <span className="text-red-500">*</span>
-                </label>
-                <select
-                  {...register('category')}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-brand-gold focus:border-transparent outline-none bg-white text-gray-800"
-                >
-                  <option value="">اختر تصنيف الملاحظة...</option>
-                  <option value="جودة الطعام">جودة الطعام والشراب</option>
-                  <option value="مستوى الخدمة">مستوى الخدمة والمعاملة</option>
-                  <option value="النظافة والجو العام">النظافة والجو العام</option>
-                  <option value="اقتراح جديد">اقتراح للتطوير</option>
-                  <option value="آخر">ملاحظة أخرى</option>
-                </select>
-                {errors.category && (
-                  <p className="text-red-500 text-sm mt-1">{errors.category.message}</p>
-                )}
-              </div>
-
-              <Textarea
-                label="تفاصيل الملاحظة أو الشكوى"
-                placeholder="اكتب ملاحظتك بكل صراحة، نحرص على الاستماع لك وتحسين تجربتك..."
-                rows={5}
-                {...register('details')}
-                error={errors.details?.message}
-                required
-              />
-
-              <Input
-                label="رقم التواصل (اختياري)"
-                placeholder="09XX XXX XXX (اتركه فارغاً إذا كنت تفضل البقاء مجهولاً)"
-                type="tel"
-                {...register('phone')}
-                error={errors.phone?.message}
-              />
-
-              <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 text-sm text-amber-800">
-                🔒 <strong>تعهد بالسرية:</strong> جميع البيانات المقدمة تذهب مباشرة لإدارة المطعم ولا يتم مشاركتها مع أي طرف أو موظف آخر.
-              </div>
-
-              <Button
-                type="submit"
-                variant="gold"
-                size="lg"
-                isLoading={isSubmitting}
-                className="w-full"
-              >
-                إرسال الملاحظة
-              </Button>
-            </form>
-          </motion.div>
+            {status.message}
+          </div>
         )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="الاسم (اختياري)"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="يمكنك تركه فارغاً للبقاء مجهولاً"
+            />
+            <Input
+              label="رقم الهاتف (اختياري)"
+              name="phone"
+              type="tel"
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="05xxxxxxxx"
+            />
+          </div>
+
+          <Input
+            label="البريد الإلكتروني (اختياري)"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="example@gmail.com"
+          />
+
+          <Input
+            label="عنوان الموضوع"
+            name="subject"
+            required
+            value={formData.subject}
+            onChange={handleChange}
+            placeholder="اكتب عنواناً مختصراً لملاحظتك"
+          />
+
+          <Textarea
+            label="تفاصيل الشكوى أو الاقتراح"
+            name="message"
+            required
+            rows={5}
+            value={formData.message}
+            onChange={handleChange}
+            placeholder="اكتب كافة التفاصيل هنا..."
+          />
+
+          <Button type="submit" variant="gold" className="w-full text-lg py-3" isLoading={isLoading}>
+            إرسال الملاحظة
+          </Button>
+        </form>
       </div>
-    </div>
+    </main>
   )
 }
